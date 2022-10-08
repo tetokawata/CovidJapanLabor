@@ -1,0 +1,94 @@
+---
+title: "Impacts of pandemic on job creation"
+author: "Keisuke Kawata"
+format: html
+bibliography: references.bib
+---
+
+# Approach
+
+-   Use the Causal-ARIMA [@menchetti2022]
+
+-   Translate estimated effect into impacts on surplus [@kawata2021]
+
+-   Use [data]
+
+# Data
+
+```{r}
+pacman::p_load(CausalArima)
+
+Raw <- readxl::read_excel("Data/HallowFullTime.xlsx")
+
+Dates <- seq.Date(from = as.Date("1995-04-01"),
+                  by = "months",
+                  length.out = nrow(Raw))
+
+
+IntDate <- as.Date("2020-01-01")
+
+Start <-as.numeric(strftime(as.Date(Dates[1], "%Y-%m-%d"), "%u"))
+```
+
+# Results
+
+## Job Finding Rate
+
+```{r}
+Y <- log(Raw$Hir/Raw$Seeker)
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+plot(ce,
+     type = "impact")
+```
+
+
+## Job Surplus
+
+```{r}
+Y <- log(Raw$Vacancy/Raw$Hir)
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+plot(ce,
+     type = "impact")
+```
+
+
+
+## Seeker
+
+```{r}
+Y <- log(Raw$Seeker)
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+plot(ce,
+     type = "impact")
+```
+
