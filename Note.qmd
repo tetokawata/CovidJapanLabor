@@ -30,9 +30,99 @@ IntDate <- as.Date("2020-01-01")
 Start <-as.numeric(strftime(as.Date(Dates[1], "%Y-%m-%d"), "%u"))
 ```
 
+# Description
+
+## Lost Job
+
+```{r}
+Y <- Raw$Hir
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+
+Fig <- plot(ce,
+            type = "impact")
+
+
+Fig$cumulative_plot
+```
+
+## Seeker
+
+```{r}
+Y <- Raw$NewSeeker
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+
+Fig <- plot(ce,
+            type = "impact")
+
+Fig$cumulative_plot
+```
+
+## Vacancy
+
+```{r}
+Y <- Raw$NewVacancy
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+
+Fig <- plot(ce,
+            type = "impact")
+
+Fig$cumulative_plot
+```
+
 # Results
 
-## Job Finding Rate
+## Seeker's surplus
+
+```{r}
+Y <- log(Raw$Vacancy/Raw$Seeker)
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+Fig <- plot(ce,
+            type = "impact")
+
+Fig$plot
+```
+
+## Finding Rate
 
 ```{r}
 Y <- log(Raw$Hir/Raw$Seeker)
@@ -47,12 +137,13 @@ ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1),
                   xreg = X, 
                   nboot = 1000)
 
-plot(ce,
-     type = "impact")
+Fig <- plot(ce,
+            type = "impact")
+
+Fig$plot
 ```
 
-
-## Job Surplus
+## Matching surplus
 
 ```{r}
 Y <- log(Raw$Vacancy/Raw$Hir)
@@ -67,28 +158,8 @@ ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1),
                   xreg = X, 
                   nboot = 1000)
 
-plot(ce,
-     type = "impact")
+Fig <- plot(ce,
+            type = "impact")
+
+Fig$plot
 ```
-
-
-
-## Seeker
-
-```{r}
-Y <- log(Raw$Seeker)
-
-X <- model.matrix(~ factor(Month),
-                  Raw)
-X <- X[,-1]
-
-ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
-                  dates = Dates, 
-                  int.date = IntDate,
-                  xreg = X, 
-                  nboot = 1000)
-
-plot(ce,
-     type = "impact")
-```
-
