@@ -1,0 +1,212 @@
+---
+title: "Impacts of pandemic on job creation"
+author: "Keisuke Kawata"
+abstract: "This paper evaluates impacts of COVID-19 on the job mataching in Japan. We use the causal ARIMA framework to statistifcally evalute the impacts and a simple economic framework to welfare evaluation."
+format:
+  pdf:
+    number-sections: true
+    colorlinks: true
+execute: 
+  echo: false
+  warning: false
+  message: false
+  eval: false
+bibliography: references.bib
+---
+
+```{r}
+pacman::p_load(CausalArima,
+               patchwork,
+               tidyverse)
+
+Raw <- readxl::read_excel("Data/HallowFullTime.xlsx")
+
+Dates <- seq.Date(from = as.Date("1995-04-01"),
+                  by = "months",
+                  length.out = nrow(Raw))
+
+
+IntDate <- as.Date("2020-01-01")
+
+Start <-as.numeric(strftime(as.Date(Dates[1], "%Y-%m-%d"), "%u"))
+```
+
+\newpage
+
+# Introduction
+
+-   Use the Causal-ARIMA [@menchetti2022]
+
+-   Translate estimated effect into impacts on surplus [@kawata2021]
+
+-   Use [data] 
+
+    - Popular, for instance, estimating [@kano2005estimating]
+
+-   Literature [@hobijn2022missing; @fukai2021describing; @kawata2021job]
+
+# Data
+
+The paper uses a administrative data from Employment Referral Services (Syokugyo-Antei-zyo in Japanese), which is a public available^[See https://www.mhlw.go.jp/toukei/list/114-1.html.].
+
+Our primary outcome variables are the number of job seekers, vacancy, and hiring.
+
+# Method
+
+This paper examines the impacts of COVID-19 on not only directly observable outcomes (including numbers of new vacancies, new job seekers, and hiring) but also welfare indicators (including the average surplus of job seekers and it is decomposition). The causal estimands is generally defined as $Y_t(1)-Y_t(0)$ where $Y_t(d)$ is the outcome variables with treatment status $d$ ($=1$ with COVID-19, and $=$ without COVID-19) at date $t$.
+$Y_t(1)-Y_t(0)$ is then interpreted as the impact of COVID-19 on labor market indicators.
+
+I first introduce a statistical framework to identify and estimate the causal impacts on observable outcomes and then formally discuss how to connect the estimable causal impacts on welfare evaluation.
+
+
+## Statistical Identification
+
+The paper uses a causal inference technique based on time-series forecasting [@menchetti2022].
+The counterfactual outcome (time-series without COVID-19 after 2020) is directly predicted by using auto-correlation and control variables.
+The time series prediction is by autoregressive integrated moving average (ARIMA) models [@brodersen2015].
+
+## Welfare outcomes
+
+@kawata2021 proposes a simple framework based on the standard Diamond-Mortencen-Pissarides model [@albrecht2011].
+
+# Description
+
+## New Employment
+
+```{r}
+Y <- Raw$Hir/1000
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+
+Fig <- plot(ce,
+            type = "impact")
+
+
+FigHir <- Fig$cumulative_plot +
+  ylim(-5000,1000) +
+  ggtitle("New Hiring")
+
+Y <- Raw$NewSeeker/1000
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+
+Fig <- plot(ce,
+            type = "impact")
+
+FigSeeker <- Fig$cumulative_plot +
+  ylim(-5000,1000) +
+  ggtitle("New Job Seeker")
+
+Y <- Raw$NewVacancy/1000
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+
+Fig <- plot(ce,
+            type = "impact")
+
+FigVacancy <- Fig$cumulative_plot +
+  ylim(-5000,1000) +
+  ggtitle("New Vacancy")
+```
+
+```{r}
+FigHir
+```
+
+```{r}
+FigSeeker
+```
+
+```{r}
+FigVacancy
+```
+
+
+
+
+# Welfare
+
+## Seeker's surplus
+
+```{r}
+Y <- log(Raw$Vacancy/Raw$Seeker)
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+FigSurplus <- plot(ce,
+                   type = "impact")$plot
+
+Y <- log(Raw$Hir/Raw$Seeker)
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+FigFingingRate <- plot(ce,
+                   type = "impact")$plot
+
+
+Y <- log(Raw$Vacancy/Raw$Hir)
+
+X <- model.matrix(~ factor(Month),
+                  Raw)
+X <- X[,-1]
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+FigMatchingSurplus <- plot(ce,
+                   type = "impact")$plot
+
+FigSurplus + FigFingingRate / FigMatchingSurplus
+```
+
+# Conclution
+
+\newpage
+
+# Reference
