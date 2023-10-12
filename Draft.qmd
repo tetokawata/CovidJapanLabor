@@ -1,82 +1,255 @@
 ---
-title: "Impacts of pandemic on job creation"
-author: "Keisuke Kawata"
-abstract: "This paper evaluates impacts of COVID-19 on the job mataching in Japan. We use the causal ARIMA framework to statistifcally evalute the impacts and a simple economic framework to welfare evaluation."
+title: "Impacts of pandemic on job creation in Japan^[The dataset and code are is available online (https://github.com/tetokawata/CovidJapanLabor)]."
+author: "Keisuke Kawata^[University of Tokyo. keisukekawata@iss.u-tokyo.ac.jp]"
+abstract: "This paper evaluates impacts of COVID-19 on the job mataching in Japan until August 2023. We use the causal ARIMA framework [@menchetti2022] to statistifcally evalute the impacts and a simple economic framework [@kawataSato2021] to welfare evaluation."
 format:
-  pdf:
-    number-sections: true
-    colorlinks: true
+  pdf: default
+  arxiv-pdf:
+    keep-tex: true
 execute: 
   echo: false
   warning: false
   message: false
-  eval: false
+  eval: true
 bibliography: references.bib
 ---
 
 ```{r}
+#| label: SetUp
 pacman::p_load(CausalArima,
                patchwork,
                tidyverse)
 
-Raw <- readxl::read_excel("Data/HallowFullTime.xlsx")
+Raw <- read_csv("Data/Total.csv")
 
-Dates <- seq.Date(from = as.Date("1995-04-01"),
-                  by = "months",
-                  length.out = nrow(Raw))
-
+Dates <- seq.Date(
+  from = as.Date("2002-01-01"),
+  by = "months",
+  length.out = nrow(Raw)
+  )
 
 IntDate <- as.Date("2020-01-01")
 
-Start <-as.numeric(strftime(as.Date(Dates[1], "%Y-%m-%d"), "%u"))
+Start <-as.numeric(
+  strftime(
+    as.Date(
+      Dates[1], 
+      "%Y-%m-%d"), 
+    "%u")
+  )
 ```
 
 \newpage
 
 # Introduction
 
--   Use the Causal-ARIMA [@menchetti2022]
+This note examines the impact of COVID-19 on the job creation process through public employment services. 
+The labor market is one of the main concerns in academic and policy research.
+Increased health risks from commuting and face-to-face contact may have reduced labor supply. 
+The decline in social activity may also have negative impacts on labor demand.
+Furthermore, the impact of infectious diseases and related policy reactions could have had a significant impact on the labor market. 
+Meanwhile, COVID-19 may increase labor demand in some sectors because new jobs could be created in response to the changes in the social and economic environment.
+For example, the increase in home consumption could have increased demand for home delivery services, resulting in more employment in the industry.
 
--   Translate estimated effect into impacts on surplus [@kawata2021]
-
--   Use [data] 
-
-    - Popular, for instance, estimating [@kano2005estimating]
-
--   Literature [@hobijn2022missing; @fukai2021describing; @kawata2021job]
+This note uses the interrupted time series analysis (Menchetti, Cipollini, and Mealli 2022) and job vacancy-seekers time series data.
+The approach allows us to estimate the causal effect of an event in time-series data.
+In addition to the estimation of the counterfactual, we estimate impacts on labor market surplus using the sufficient statistics approach (Kawata and Sato 2021).
 
 # Data
 
-The paper uses a administrative data from Employment Referral Services (Syokugyo-Antei-zyo in Japanese), which is a public available^[See https://www.mhlw.go.jp/toukei/list/114-1.html.].
+The note uses administrative data from Employment Referral Services (Syokugyo-Antei-zyo in Japanese), available online^[See https://www.mhlw.go.jp/toukei/list/114-1.html.].
+The data provides monthly vacancy, job seeker, and hiring numbers, including full-time and part-time jobs.
+Our sample period is January 2002 – August 2023 $T=260$.
 
-Our primary outcome variables are the number of job seekers, vacancy, and hiring.
+The interrupted time series analysis requires time series before an event.
+In this application, the pre-event period is defined as January 2022 - December 2019, and the post-event period is January 2020 - August 2023.
+
+## Summary Statistics
+
+```{r}
+#| label: DescFlow
+
+Fig1 <- Raw |> 
+  mutate(
+    Date = str_c(Year,Month,"01",sep = "-") |> 
+      as.Date()
+  ) |> 
+  ggplot(
+    aes(
+      x = Date,
+      y = NewVacancy/10000
+    )
+  ) +
+  theme_bw() +
+  geom_line() +
+  ylab("New Vacancies") +
+  ylim(0,110)
+
+Fig2 <- Raw |> 
+  mutate(
+    Date = str_c(Year,Month,"01",sep = "-") |> 
+      as.Date()
+  ) |> 
+  ggplot(
+    aes(
+      x = Date,
+      y = NewSeeker/10000
+    )
+  ) +
+  theme_bw() +
+  geom_line() +
+  ylab("New Seekers") +
+  ylim(0,110)
+
+
+Fig3 <- Raw |> 
+  mutate(
+    Date = str_c(Year,Month,"01",sep = "-") |> 
+      as.Date()
+  ) |> 
+  ggplot(
+    aes(
+      x = Date,
+      y = Hir/10000
+    )
+  ) +
+  theme_bw() +
+  geom_line() +
+  ylab("New Employment") +
+  ylim(0,110)
+
+cowplot::plot_grid(
+  Fig1,
+  Fig2,
+  Fig3
+  )
+```
+
+Figure 1. Numbers of new vacancies, job seekers, and employment^[Each number is normalized as one thousand.].
+
+Figure 1 reports the number of new vacancies, seekers, and employment.
+Throughout the 2010s, the number of new job seekers declined while the number of new job openings increased.
+Finally, the number of new employment is slightly decreasing.
+
+In April 2020, the number of new vacancies largely decreased.
+It may reflect the influence of the COVID-19.
+After that, the number of new jobs has recovered but has not returned to 2019.
+
+```{r}
+#| label: DescRatio
+
+Fig1 <- Raw |> 
+  mutate(
+    Date = str_c(Year,Month,"01",sep = "-") |> 
+      as.Date()
+  ) |> 
+  ggplot(
+    aes(
+      x = Date,
+      y = Hir/Seeker
+    )
+  ) +
+  theme_bw() +
+  geom_line()+
+  ylab("Job Finding Rate") +
+  ylim(0,0.2)
+
+Fig2 <- Raw |> 
+  mutate(
+    Date = str_c(Year,Month,"01",sep = "-") |> 
+      as.Date()
+  ) |> 
+  ggplot(
+    aes(
+      x = Date,
+      y = Hir/Vacancy
+    )
+  ) +
+  theme_bw() +
+  geom_line() +
+  ylab("Job Filling Rate") +
+  ylim(0,0.2)
+
+
+Fig3 <- Raw |> 
+  mutate(
+    Date = str_c(Year,Month,"01",sep = "-") |> 
+      as.Date()
+  ) |> 
+  ggplot(
+    aes(
+      x = Date,
+      y = Vacancy/Seeker
+    )
+  ) +
+  theme_bw() +
+  geom_line() +
+  ylab("Market Tightness")
+
+cowplot::plot_grid(
+  Fig1,
+  Fig2,
+  Fig3
+  )
+
+```
+
+Figure 2. Job finding, filling rates, and market tightness.
+
+Figure 2 reports conventional market statistics, job finding rate (dividing the number of new employment by the number of job seekers), job filling rate (dividing the number of new employment by the number of vacancies), and market tightness (dividing the number of vacancies by the number of job seekers).
+All statistics show trends consistent with Figure 1.
+
+Throughout the 2010s, the job-finding rate increased while the job-filling rate declined, and then the market tightness increased.
+All results consistently show that improving the labor market condition.
+
+In April 2020, the market tightness and the job-finding rate dropped.
+After that, the market tightness has been recovering while the job-finding rate is still decreasing.
+
+Both Figures 1 and 2 may consistently show the large impacts of COVID-19 on the Japanese labor market.
+However, its quantitative implications are limited because influences of time trends and seasons are not controlled, and statistical uncertainty is not evaluated.
+The following section then introduces the statistical framework to evaluate the impacts of COVID-19 with statistical uncertainty.
 
 # Method
 
-This paper examines the impacts of COVID-19 on not only directly observable outcomes (including numbers of new vacancies, new job seekers, and hiring) but also welfare indicators (including the average surplus of job seekers and it is decomposition). The causal estimands is generally defined as $Y_t(1)-Y_t(0)$ where $Y_t(d)$ is the outcome variables with treatment status $d$ ($=1$ with COVID-19, and $=$ without COVID-19) at date $t$.
-$Y_t(1)-Y_t(0)$ is then interpreted as the impact of COVID-19 on labor market indicators.
+This paper examines the impacts of COVID-19 on not only directly observable outcomes (including numbers of new vacancies, new job seekers, and hiring) but also welfare indicators (including the average surplus of job seekers and it is decomposition). 
+The causal estimands is generally defined as $Y_t(1)-Y_t(0)$ where $Y_t(d)$ is the outcome variables with treatment status $d$ ($=1$ after COVID-19, and $=$ before COVID-19) at date $t$.
+$Y_t(1)-Y_t(0)$ is then interpreted as the impact of COVID-19 on outcome variables.
 
-I first introduce a statistical framework to identify and estimate the causal impacts on observable outcomes and then formally discuss how to connect the estimable causal impacts on welfare evaluation.
+## Statistical Estimation
 
+The paper uses a causal inference method based on time-series forecasting [@menchetti2022], an extension of the causal impact framework  [@brodersen2015].
+Let $Y_t^p$ be the predicted value by using auto-correlation and control variables.
+The causal estimand $Y_t(1)-Y_t(0)$ is directly estimated by a simple imputation as $Y_t(1)-Y_t^p$.
 
-## Statistical Identification
+The time series prediction $Y_t^p$ is estimated by autoregressive integrated moving average (ARIMA) models with the stationary assumption.
+The estimation uses a time series before COVID-19 (December 2019).
+The time series regression includes lagged $Y$, month dummies, and linear trends.
+The Akaike Information Criterion selects the lag length.
+The confidence intervals are estimated by bootstrap^[All estimation is implemented in the CausalArima package for R (https://github.com/FMenchetti/CausalArima/)].
 
-The paper uses a causal inference technique based on time-series forecasting [@menchetti2022].
-The counterfactual outcome (time-series without COVID-19 after 2020) is directly predicted by using auto-correlation and control variables.
-The time series prediction is by autoregressive integrated moving average (ARIMA) models [@brodersen2015].
+## Welfare estimation
 
-## Welfare outcomes
+If $Y$ is directly observed, @menchetti2022 's approach can directly apply.
+However, comprehensive evaluation of labor markets also requires estimating impacts on unobservable indicators.
+This note estimates impacts on labor market surplus.
+@kawataSato2021 shows that the generalized standard search model [@rogerson2005search] allows us to identify the impact on job seekers' surplus.
+They show that the impact on market tightness is a sufficient statistic of the impact on job seekers' surplus.
 
-@kawata2021 proposes a simple framework based on the standard Diamond-Mortencen-Pissarides model [@albrecht2011].
+Formally, @kawataSato2021 supposes a simple framework based on the standard Diamond-Mortencen-Pissarides model [@albrecht2011].
+The total market surplus $S$ is $$S=p\times\Delta$$ where $p$ is the job finding rate, and $\Delta$ is the matching surplus.
+Let be $S^P$ the counterfactual surplus, and the log-difference between realized and counterfactual surplus $\log(S)-\log(S^P)$ is decomposed into the contribution of the job finding rate $\log(p) - \log(p^P)$ and the matching surplus $\log(\Delta)-\log(\Delta^P).$
 
-# Description
+@kawataSato2021 shows that the log-difference of $S$ equals the log-difference of the market tightness.
+Moreover, the contribution of the job-finding rate and the matching surplus is also identified by the log change of the job-finding rate and the inverse of the job-filling rate, respectively.
 
-## New Employment
+# Results
+
+## Impacts on observable indicators
 
 ```{r}
 Y <- Raw$Hir/1000
 
-X <- model.matrix(~ factor(Month),
+X <- model.matrix(~ Year + factor(Month),
                   Raw)
 X <- X[,-1]
 
@@ -91,36 +264,28 @@ Fig <- plot(ce,
             type = "impact")
 
 
-FigHir <- Fig$cumulative_plot +
+FigHir <- Fig$plot +
   ylim(-5000,1000) +
-  ggtitle("New Hiring")
+  ggtitle("") +
+  ylab("New Employment")
 
 Y <- Raw$NewSeeker/1000
 
-X <- model.matrix(~ factor(Month),
-                  Raw)
-X <- X[,-1]
-
 ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
                   dates = Dates, 
                   int.date = IntDate,
                   xreg = X, 
                   nboot = 1000)
-
-
 Fig <- plot(ce,
             type = "impact")
 
-FigSeeker <- Fig$cumulative_plot +
+FigSeeker <- Fig$plot +
   ylim(-5000,1000) +
-  ggtitle("New Job Seeker")
+  ggtitle("") +
+  ylab("New Seeker")
 
 Y <- Raw$NewVacancy/1000
 
-X <- model.matrix(~ factor(Month),
-                  Raw)
-X <- X[,-1]
-
 ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
                   dates = Dates, 
                   int.date = IntDate,
@@ -131,36 +296,30 @@ ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1),
 Fig <- plot(ce,
             type = "impact")
 
-FigVacancy <- Fig$cumulative_plot +
+FigVacancy <- Fig$plot +
   ylim(-5000,1000) +
-  ggtitle("New Vacancy")
+  ggtitle("") +
+  ylab("New Vacancy")
+
+cowplot::plot_grid(
+  FigHir,
+  FigSeeker,
+  FigVacancy
+  )
+
 ```
 
-```{r}
-FigHir
-```
+Figure 3. Estimated impacts on new employment, job seekers, and vacancies^[Each number is normalized as one thousand.].
+
+Figure 3 reports estimated impacts on the number of new employees, new job seekers, and new vacancies.
+The figure clearly shows the negative impacts on new employment and vacancies.
+Both quantities are not recovered even in 2023.
+The impact on the number of new seekers is not clear, except for April 2020.
+
+## Impacts on welfare indicators
 
 ```{r}
-FigSeeker
-```
-
-```{r}
-FigVacancy
-```
-
-
-
-
-# Welfare
-
-## Seeker's surplus
-
-```{r}
-Y <- log(Raw$Vacancy/Raw$Seeker)
-
-X <- model.matrix(~ factor(Month),
-                  Raw)
-X <- X[,-1]
+Y <- (Raw$Vacancy/Raw$Seeker) |> log()
 
 ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
                   dates = Dates, 
@@ -168,30 +327,13 @@ ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1),
                   xreg = X, 
                   nboot = 1000)
 
-FigSurplus <- plot(ce,
-                   type = "impact")$plot
+FigSurplus <- plot(
+  ce,
+  type = "impact")$plot +
+  ggtitle("") +
+  ylab("Total Surplus")
 
-Y <- log(Raw$Hir/Raw$Seeker)
-
-X <- model.matrix(~ factor(Month),
-                  Raw)
-X <- X[,-1]
-
-ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
-                  dates = Dates, 
-                  int.date = IntDate,
-                  xreg = X, 
-                  nboot = 1000)
-
-FigFingingRate <- plot(ce,
-                   type = "impact")$plot
-
-
-Y <- log(Raw$Vacancy/Raw$Hir)
-
-X <- model.matrix(~ factor(Month),
-                  Raw)
-X <- X[,-1]
+Y <- (Raw$Hir/Raw$Seeker) |> log()
 
 ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
                   dates = Dates, 
@@ -199,13 +341,45 @@ ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1),
                   xreg = X, 
                   nboot = 1000)
 
-FigMatchingSurplus <- plot(ce,
-                   type = "impact")$plot
+FigFingingRate <- plot(
+  ce,
+  type = "impact")$plot +
+  ggtitle("") +
+  ylab("Job Finding Rate")
 
-FigSurplus + FigFingingRate / FigMatchingSurplus
+
+Y <- (Raw$Vacancy/Raw$Hir) |> log()
+
+ce <- CausalArima::CausalArima(y = ts(Y, start = Start, frequency = 1), 
+                  dates = Dates, 
+                  int.date = IntDate,
+                  xreg = X, 
+                  nboot = 1000)
+
+FigMatchingSurplus <- plot(
+  ce,
+  type = "impact")$plot +
+  ggtitle("") +
+  ylab("Matching Surplus")
+
+cowplot::plot_grid(
+  FigSurplus,
+  FigFingingRate,
+  FigMatchingSurplus
+  )
 ```
 
-# Conclution
+Figure 4. Estimated impacts on surplus indicators.
+
+Figure 4 shows estimated impacts on surplus indicators, including total surplus, job finding rate, and matching surplus.
+The figure clearly shows the negative impacts of COVID-19 on the surplus because the total surplus decreased until mid-2020.
+After that, the total surplus is slowly recovering, even lower in 2023.
+
+Other figures show the decomposition results.
+The contribution of the matching surplus is limited until early 2021 and then positively contribute to recovery.
+The job-finding rate negatively contributes until early-2020 and is then not recovered.
+Therefore, the main reason for the decreasing surplus is the lower job-finding rate.
+
 
 \newpage
 
